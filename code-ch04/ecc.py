@@ -343,6 +343,20 @@ class PrivateKey:
                 return candidate
             k = hmac.new(k, v + b'\x00', s256).digest()
             v = hmac.new(k, v, s256).digest()
+            
+    def wif(self, compressed = True, testnet = False):
+        secret_bytes = self.secret.to_bytes(32, 'big')
+        if testnet:
+            prefix = b'\xef'
+        else:
+            prefix = b'\x80'
+            
+        if compressed:
+            suffix = b'\x01'
+        else:
+            suffix = b''
+            
+        return encode_base58_checksum(prefix + secret_bytes + suffix)
                     
                 
 BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
