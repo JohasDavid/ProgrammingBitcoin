@@ -46,8 +46,5 @@ def little_endian_to_int(b):
 def int_to_little_endian(n, length = 32):
     return n.to_bytes(length, 'little')
 
-def read_varints(s):
-    """read_varint reads a variable integer from a stream"""
-    i = s.read(1)[0]
-    if i == 0xfd:
+
         

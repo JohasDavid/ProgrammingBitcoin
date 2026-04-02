@@ -39,10 +39,18 @@ class Tx:
         version = int.from_bytes(serialized_version, 'little')
         num_inputs = read_varint(stream)
         inputs = []
+        
         for _ in range(num_inputs):
             inputs.append(TxIn.parse(stream))
-        
-        return version, inputs
+        num_outputs = read_varint(stream)
+        outputs = []
+        for _ in range(num_outputs):
+            outputs.append(TxOut.parse(stream))
+            
+        locktime_read = stream.read(4)
+        locktime = int.from_bytes(locktime_read, "little")
+        testnet = False
+        return cls(version, inputs, outputs, locktime, testnet)
     
 class TxIn:
     def __init__(self, prev_tx, prev_index, script_sig = None, sequence = 0xffffffff):
@@ -64,4 +72,18 @@ class TxIn:
         script_sig = Script.parse(stream)
         sequence = int.from_bytes(stream.read(4), 'little')
         return cls(prev_tx, prev_index, script_sig, sequence)
+    
+class TxOut:
+    def __init__(self, amount, script_pubkey):
+        self.amount = amount
+        self.script_pubkey = script_pubkey
+        
+    def __repr__(self):
+        return f"{self.amount} : {self.script_pubkey}"
+    
+    @classmethod
+    def parse(cls, stream):
+        amount = int.from_bytes(stream.read(8), 'little')
+        script_pubkey = Script.parse(stream)
+        return cls(amount, script_pubkey)
     
