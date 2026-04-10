@@ -1,5 +1,5 @@
-from helper import hash256, hash160, read_varint,little_endian_to_int
-
+from helper import hash256, hash160, read_varint,little_endian_to_int, int_to_little_endian, encode_varint
+from op import OP_CODE_FUNCTIONS, OP_CODE_NAMES
 def op_dup(stack):
     if len(stack) < 1:
         return False
@@ -20,12 +20,7 @@ def op_hash160(stack):
     stack.append(hash160(element))
     return True
 
-OP_CODE_FUNCTIONS = {
-    
-    118: op_dup,
-    170: op_hash256,
-    0xa9: op_hash160,
-}
+
 
 class Script:
     def __init__(self, cmds = None):
@@ -33,6 +28,9 @@ class Script:
             self.cmds = []
         else:
             self.cmds = cmds
+            
+    def __add__(self, other):
+        return Script(self.cmds + other.cmds)
     
     @classmethod
     def parse(cls, s):
@@ -62,3 +60,59 @@ class Script:
         if count != length:
             raise SyntaxError('parsing script failed')
         return cls(cmds)
+    
+    def raw_serialize(self):
+        result = b''
+        for cmd in self.cmds:
+            if type(cmd) == int:
+                result += int_to_little_endian(cmd, 1)
+            else:
+                length = len(cmd)
+                if length < 75:
+                    result += int_to_little_endian(length, 1)
+                elif length > 75 and length < 0x100:
+                    result += int_to_little_endian(76, 1)
+                    result += int_to_little_endian(length, 1)
+                elif length >= 0x100 and length <= 520:
+                    result += int_to_little_endian(77, 1)
+                    result += int_to_little_endian(length, 2)
+                else:
+                    raise ValueError('too long an cmd')
+                result += cmd
+        return result
+    
+    def serialize(self):
+        result = self.raw_serialize()
+        total = len(result)
+        return encode_varint(total) + result
+    
+    def evaluate(self, z):
+        cmds = self.cmds[:]
+        stack = []
+        altstack = []
+        while len(cmds) > 0:
+            cmd = cmds.pop(0)
+            if type(cmd) == int:
+                operation = OP_CODE_FUNCTIONS[cmd]
+                if cmd in (99, 100):
+                    if not operation(stack, cmds):
+                        LOGGER.info('bad op: {}'.format(OP_CODE_NAMES[cmd]))
+                        return False
+                elif cmd in (107, 108):
+                    if not operation(stack, altstack):
+                        LOGGER.info('bad op: {}'.format(OP_CODE_NAMES[cmd]))
+                elif cmd in (172, 173, 174, 175):
+                    if not operation(stack, z):
+                        LOGGER.info('bad op: {}'.format(OP_CODE_NAMES[cmd]))
+                        return False
+                else:
+                    if not operation(stack):
+                        LOGGER.info('bad op: {}'.format(OP_CODE_NAMES[cmd]))
+                        return False
+            else:
+                stack.append(cmd)
+            if len(stack) == 0:
+                return False
+            if stack.pop() == b'':
+                return False
+            return True
